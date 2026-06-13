@@ -4,6 +4,7 @@
 Usage:
   python eval_humaneval.py
   python eval_humaneval.py HumanEval/0
+  python eval_humaneval.py HumanEval/0 --stream
 """
 
 from __future__ import annotations
@@ -12,14 +13,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from core.agent import run_executo
+from core.agent import print_run_summary, run_executo
+from core.errors import format_setup_error
 from core.humaneval import DEFAULT_DATASET, load_task
-
-
-def _status(passed: bool | None) -> str:
-    if passed is None:
-        return "N/A"
-    return "PASS" if passed else "FAIL"
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +33,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_DATASET,
         help=f"Path to HumanEval.jsonl (default: {DEFAULT_DATASET}).",
+    )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Show live agent progress.",
+    )
+    parser.add_argument(
+        "--max-attempts",
+        type=int,
+        default=4,
+        help="Max execute attempts (default: 4).",
     )
     return parser.parse_args()
 
@@ -58,26 +65,18 @@ def main() -> int:
             "",
             humaneval_task_id=args.task_id,
             humaneval_dataset=args.dataset,
+            max_attempts=args.max_attempts,
+            stream=args.stream,
         )
     except RuntimeError as exc:
-        print(f"Setup error: {exc}", file=sys.stderr)
+        print(format_setup_error(str(exc)), file=sys.stderr)
         return 2
 
     if not result.get("code"):
         print("Agent returned no code.", file=sys.stderr)
         return 1
 
-    print("=" * 60)
-    print(f"Overall: {_status(result.get('passed'))} after {result.get('attempts', 0)} attempt(s)")
-    print(f"AI self-tests: {_status(result.get('self_test_passed'))}")
-    print(f"HumanEval tests: {_status(result.get('humaneval_passed'))}")
-    print("=" * 60)
-    print("\n--- generated code ---\n")
-    print(result.get("code", ""))
-    if result.get("output"):
-        print("\n--- last sandbox output ---\n")
-        print(result.get("output", ""))
-
+    print_run_summary(result)
     return 0 if result.get("passed") else 1
 
 

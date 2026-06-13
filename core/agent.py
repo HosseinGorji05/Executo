@@ -7,7 +7,10 @@ Execute runs AI self-tests in Docker. If humaneval_task_id is set, HumanEval
 fixed tests run too — both must pass (strict).
 
 Normal: python -m core.agent "your prompt"
-HumanEval: run_executo("", humaneval_task_id="HumanEval/0") or eval_humaneval.py
+HumanEval: python -m core.agent --humaneval HumanEval/0
+           python eval_humaneval.py HumanEval/0
+Batch:     python eval_humaneval_batch.py --limit 10
+Streaming: add --stream to any of the above
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from core import prompts
+from core.errors import format_failure_summary, format_llm_error, format_setup_error
 from core.sandbox import SandboxResult, docker_available, run_code_with_tests
 from core.humaneval import load_task, build_humaneval_test, DEFAULT_DATASET
 from pathlib import Path
@@ -197,14 +201,60 @@ def build_agent():
     return graph.compile()
 
 
+def _status_label(passed: bool | None) -> str:
+    if passed is None:
+        return "N/A"
+    return "PASS" if passed else "FAIL"
+
+
+def _print_stream_event(node: str, update: dict[str, Any], state: AgentState) -> None:
+    if node == "generate":
+        print("[generate] Writing code and self-tests...")
+    elif node == "execute":
+        ai = _status_label(update.get("self_test_passed"))
+        he = (
+            _status_label(update.get("humaneval_passed"))
+            if state.get("humaneval_test_code")
+            else "skipped"
+        )
+        overall = _status_label(update.get("passed"))
+        attempt = update.get("attempts", state.get("attempts", 0))
+        print(f"[execute] Attempt {attempt}: overall={overall} | AI={ai} | HumanEval={he}")
+        if not update.get("passed") and update.get("output"):
+            preview = update["output"].strip().splitlines()[-3:]
+            print("  last errors:")
+            for line in preview:
+                print(f"    {line}")
+    elif node == "fix":
+        print(f"[fix] Rewriting code after failed tests (attempt {state.get('attempts', 0)})...")
+
+
+def print_run_summary(result: AgentState) -> None:
+    overall = _status_label(result.get("passed"))
+    print("=" * 60)
+    print(f"Overall: {overall} after {result.get('attempts')} attempt(s)")
+    print(f"AI self-tests: {_status_label(result.get('self_test_passed'))}")
+    if result.get("humaneval_test_code"):
+        print(f"HumanEval tests: {_status_label(result.get('humaneval_passed'))}")
+    failure = format_failure_summary(result)
+    if failure:
+        print(f"\nNote: {failure}")
+    print("=" * 60)
+    print("\n--- snippet.py ---\n")
+    print(result.get("code", ""))
+    print("\n--- test_snippet.py ---\n")
+    print(result.get("test_code", ""))
+    print("\n--- last sandbox output ---\n")
+    print(result.get("output", ""))
+
+
 def run_executo(
     task: str,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     model: str = DEFAULT_MODEL,
     humaneval_task_id: str | None = None,
-    humaneval_dataset: Path | None = None
-
-
+    humaneval_dataset: Path | None = None,
+    stream: bool = False,
 ) -> AgentState:
     if not os.environ.get("GROQ_API_KEY"):
         raise RuntimeError(
@@ -218,63 +268,95 @@ def run_executo(
     humaneval_test_code = ""
     if humaneval_task_id:
         dataset = humaneval_dataset or DEFAULT_DATASET
+        if not dataset.exists():
+            raise RuntimeError(
+                f"HumanEval dataset not found: {dataset}. "
+                "Run: python download_coding_datasets.py"
+            )
         row = load_task(dataset, humaneval_task_id)
         humaneval_test_code = build_humaneval_test(row["entry_point"], row["test"])
         task = f"Complete the following Python function:\n\n{row['prompt']}"
 
-    final_state: AgentState = agent.invoke(
-        {
-            "task": task,
-            "max_attempts": max_attempts,
-            "model": model,
-            "humaneval_test_code": humaneval_test_code,
-        }
-    )
+    initial_state: AgentState = {
+        "task": task,
+        "max_attempts": max_attempts,
+        "model": model,
+        "humaneval_test_code": humaneval_test_code,
+    }
+
+    if not stream:
+        return agent.invoke(initial_state)
+
+    print("Streaming agent progress...\n")
+    final_state: AgentState = dict(initial_state)
+    for event in agent.stream(initial_state, stream_mode="updates"):
+        for node, update in event.items():
+            final_state.update(update)
+            if stream:
+                _print_stream_event(node, update, final_state)
     return final_state
 
-def _status_label(passed: bool | None) -> str:
-    if passed is None:
-        return "N/A"
-    return "PASS" if passed else "FAIL"
+
+def _build_cli_parser():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Executo — natural language to self-correcting Python."
+    )
+    parser.add_argument(
+        "task",
+        nargs="*",
+        help="Natural-language coding task.",
+    )
+    parser.add_argument(
+        "--humaneval",
+        metavar="ID",
+        help="Run a HumanEval task instead (e.g. HumanEval/0).",
+    )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Print live progress as the agent runs.",
+    )
+    parser.add_argument(
+        "--max-attempts",
+        type=int,
+        default=DEFAULT_MAX_ATTEMPTS,
+        help=f"Max execute attempts (default: {DEFAULT_MAX_ATTEMPTS}).",
+    )
+    return parser
+
 
 def _main() -> int:
     import sys
 
-    task = " ".join(sys.argv[1:]).strip() or (
-        "Write a function add(a, b) that returns the sum of two numbers."
-    )
-    print(f"Task: {task}\n")
+    parser = _build_cli_parser()
+    args = parser.parse_args()
+
+    task = " ".join(args.task).strip()
+    if not task and not args.humaneval:
+        task = "Write a function add(a, b) that returns the sum of two numbers."
+
+    if args.humaneval:
+        print(f"HumanEval task: {args.humaneval}\n")
+    elif task:
+        print(f"Task: {task}\n")
+
     try:
-        result = run_executo(task)
+        result = run_executo(
+            task,
+            max_attempts=args.max_attempts,
+            humaneval_task_id=args.humaneval,
+            stream=args.stream,
+        )
     except RuntimeError as exc:
-        print(f"Setup error: {exc}", file=sys.stderr)
+        print(format_setup_error(str(exc)), file=sys.stderr)
         return 2
-    except Exception as exc:  # noqa: BLE001 - surface a clean message to the user
-        message = str(exc)
-        if "RESOURCE_EXHAUSTED" in message or "429" in message or "rate_limit" in message.lower():
-            print(
-                "Groq API error: rate limit or quota exceeded.\n"
-                "Check usage at https://console.groq.com/ or try a "
-                "different model via GROQ_MODEL in .env.",
-                file=sys.stderr,
-            )
-        else:
-            print(f"LLM error: {message}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(format_llm_error(str(exc)), file=sys.stderr)
         return 1
 
-    overall = _status_label(result.get("passed"))
-    print("=" * 60)
-    print(f"Overall: {overall} after {result.get('attempts')} attempt(s)")
-    print(f"AI self-tests: {_status_label(result.get('self_test_passed'))}")
-    if result.get("humaneval_test_code"):
-        print(f"HumanEval tests: {_status_label(result.get('humaneval_passed'))}")
-    print("=" * 60)
-    print("\n--- snippet.py ---\n")
-    print(result.get("code", ""))
-    print("\n--- test_snippet.py ---\n")
-    print(result.get("test_code", ""))
-    print("\n--- last sandbox output ---\n")
-    print(result.get("output", ""))
+    print_run_summary(result)
     return 0 if result.get("passed") else 1
 
 
