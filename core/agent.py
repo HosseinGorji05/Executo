@@ -328,6 +328,7 @@ def stream_executo_events(
 
     final_state: AgentState = dict(initial_state)
     yield "start", dict(final_state)
+    yield "generating", dict(final_state)
 
     for event in agent.stream(initial_state, stream_mode="updates"):
         for node, update in event.items():
