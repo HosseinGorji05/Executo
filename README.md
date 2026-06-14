@@ -3,9 +3,7 @@
 > Natural language → tested Python, automatically.**
 > Describe what you want. Executo writes the code, tests it in an isolated Docker sandbox, and fixes itself until the tests pass.
 
-|
-|
-|
+---
 
 What it does
 
