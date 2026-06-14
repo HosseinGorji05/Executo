@@ -18,6 +18,7 @@ from core.errors import (
     format_llm_error,
     format_setup_error,
 )
+from core.rate_limit import RateLimiter
 
 TITLE = "Executo"
 TAGLINE = (
@@ -244,47 +245,64 @@ def _assistant_history(history: list, text: str) -> list:
     return base
 
 
-def chat(message: str, history: list, max_attempts: int):
-    """Handle a new user message with streaming updates."""
-    if not message or not message.strip():
-        yield history, "", "", "", ""
-        return
-
-    history = copy.deepcopy(history or [])
-    history.append({"role": "user", "content": message.strip()})
-    history.append({"role": "assistant", "content": "⏳ Starting…"})
-
-    try:
-        for text, solution, tests in _stream_response(message, max_attempts):
-            yield _assistant_history(history, text), "", solution, tests, message.strip()
-    except RuntimeError as exc:
-        yield (
-            _assistant_history(history, f"⚠️ **Setup needed**\n\n{format_setup_error(str(exc))}"),
-            "",
-            "",
-            "",
-            message.strip(),
-        )
-    except Exception as exc:  # noqa: BLE001
-        yield (
-            _assistant_history(history, f"⚠️ **Something went wrong**\n\n{format_llm_error(str(exc))}"),
-            "",
-            "",
-            "",
-            message.strip(),
-        )
-
-
-def run_again(history: list, max_attempts: int, last_prompt: str):
-    """Re-run the last prompt."""
-    if not last_prompt:
-        gr.Info("No previous prompt to run again.")
-        yield history, "", "", "", last_prompt
-        return
-    yield from chat(last_prompt, history, max_attempts)
-
-
 def build_ui() -> gr.Blocks:
+    limiter = RateLimiter()
+
+    def chat(message: str, history: list, max_attempts: int):
+        """Handle a new user message with streaming updates + rate limiting."""
+        if not message or not message.strip():
+            yield history, "", "", "", ""
+            return
+
+        ok, rate_msg = limiter.check()
+        if not ok:
+            history = copy.deepcopy(history or [])
+            history.append({"role": "user", "content": message.strip()})
+            history.append({"role": "assistant", "content": rate_msg})
+            yield history, "", "", "", message.strip()
+            return
+
+        limiter.record()
+
+        history = copy.deepcopy(history or [])
+        history.append({"role": "user", "content": message.strip()})
+        history.append({"role": "assistant", "content": "⏳ Starting…"})
+
+        try:
+            for text, solution, tests in _stream_response(message, max_attempts):
+                yield _assistant_history(history, text), "", solution, tests, message.strip()
+        except RuntimeError as exc:
+            yield (
+                _assistant_history(history, f"⚠️ **Setup needed**\n\n{format_setup_error(str(exc))}"),
+                "",
+                "",
+                "",
+                message.strip(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            yield (
+                _assistant_history(history, f"⚠️ **Something went wrong**\n\n{format_llm_error(str(exc))}"),
+                "",
+                "",
+                "",
+                message.strip(),
+            )
+
+    def run_again(history: list, max_attempts: int, last_prompt: str):
+        """Re-run the last prompt."""
+        if not last_prompt:
+            gr.Info("No previous prompt to run again.")
+            yield history, "", "", "", last_prompt
+            return
+        yield from chat(last_prompt, history, max_attempts)
+
+    def tip_text() -> str:
+        return (
+            f"🐳 Code runs in an isolated Docker sandbox. "
+            f"Always review before production. "
+            f"*{limiter.status_line()}*"
+        )
+
     with gr.Blocks(title=TITLE, fill_height=True) as demo:
         gr.HTML(
             f"""
@@ -351,10 +369,7 @@ def build_ui() -> gr.Blocks:
                     interactive=False,
                 )
 
-        gr.HTML(
-            '<p class="executo-tip">Code runs in an isolated Docker sandbox. '
-            "Always review before using in production.</p>"
-        )
+        rate_tip = gr.Markdown(tip_text(), elem_classes="executo-tip")
 
         stream_kw = {"concurrency_limit": 1, "show_progress": "hidden"}
 
@@ -363,19 +378,19 @@ def build_ui() -> gr.Blocks:
             inputs=[msg, chatbot, max_attempts],
             outputs=[chatbot, msg, solution_code, test_code, last_prompt],
             **stream_kw,
-        )
+        ).then(tip_text, outputs=[rate_tip])
         msg.submit(
             chat,
             inputs=[msg, chatbot, max_attempts],
             outputs=[chatbot, msg, solution_code, test_code, last_prompt],
             **stream_kw,
-        )
+        ).then(tip_text, outputs=[rate_tip])
         run_again_btn.click(
             run_again,
             inputs=[chatbot, max_attempts, last_prompt],
             outputs=[chatbot, msg, solution_code, test_code, last_prompt],
             **stream_kw,
-        )
+        ).then(tip_text, outputs=[rate_tip])
         clear.click(
             lambda: ([], "", "", "", ""),
             outputs=[chatbot, msg, solution_code, test_code, last_prompt],
