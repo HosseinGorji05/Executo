@@ -1,11 +1,11 @@
-⚡ Executo
+# ⚡ Executo
 
-> Natural language → tested Python, automatically.**
+> **Natural language → tested Python, automatically.**
 > Describe what you want. Executo writes the code, tests it in an isolated Docker sandbox, and fixes itself until the tests pass.
 
 ---
 
-What it does
+## What it does
 
 ```
 Your prompt  →  LLM writes code + tests  →  Docker sandbox runs tests
@@ -145,11 +145,9 @@ EXECUTO_MAX_RUNS_PER_SESSION=10
 EXECUTO_COOLDOWN_SECONDS=30
 ```
 
-|
-|
-|
+---
 
-Environment variables
+## Environment variables
 
 | Variable                       | Required | Default                      | Description                  |
 |--------------------------------|----------|------------------------------|------------------------------|
@@ -158,10 +156,17 @@ Environment variables
 | `EXECUTO_MAX_RUNS_PER_SESSION` | No       | `10`                         | Max runs per browser session |
 | `EXECUTO_COOLDOWN_SECONDS`     | No       | `30`                         | Cooldown between runs (sec)  |
 
-|
-|
-|
+---
 
+## Roadmap
+
+- [x] Week 1 — Core self-correction loop (LangGraph + Docker + Groq)
+- [x] Week 2 — HumanEval integration, streaming, batch benchmark
+- [x] Week 3 — Gradio web UI (chat, dark mode, code tabs)
+- [x] Week 4 — Rate limiting, README, stability testing
+
+
+---
 
 ## License
 
