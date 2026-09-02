@@ -31,7 +31,7 @@ from pathlib import Path
 
 load_dotenv()
 
-DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 DEFAULT_MAX_ATTEMPTS = 4
 
 

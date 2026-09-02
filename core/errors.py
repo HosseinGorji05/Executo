@@ -19,10 +19,16 @@ def format_setup_error(message: str) -> str:
 
 def format_llm_error(message: str) -> str:
     lower = message.lower()
+    if "model_not_found" in lower or "does not exist or you do not have access" in lower:
+        return (
+            "Groq model not found or no longer available.\n"
+            "Set GROQ_MODEL=openai/gpt-oss-20b in .env (or remove GROQ_MODEL to use the default).\n"
+            "See https://console.groq.com/docs/models for current model IDs."
+        )
     if "429" in message or "rate_limit" in lower or "resource_exhausted" in lower:
         return (
             "Groq rate limit hit.\n"
-            "Wait a minute or set GROQ_MODEL=llama-3.1-8b-instant in .env.\n"
+            "Wait a minute or try a smaller model (e.g. openai/gpt-oss-20b).\n"
             "Dashboard: https://console.groq.com/"
         )
     if "invalid_api_key" in lower or "401" in message:

@@ -56,7 +56,7 @@ cp .env.example .env
 `.env`:
 ```
 GROQ_API_KEY=gsk_your_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-20b
 ```
 
 ### 3. Start Docker Desktop
@@ -125,7 +125,7 @@ python eval_humaneval_batch.py --limit 20
 | Layer         | Technology                        |
 |---------------|-----------------------------------|
 | Orchestration | LangGraph                         |
-| LLM           | Groq (`llama-3.3-70b-versatile`)  |
+| LLM           | Groq (`openai/gpt-oss-20b`)         |
 | Sandbox       | Docker (isolated, no network)     |
 | UI            | Gradio 6                          |
 | Datasets      | HumanEval, MBPP                   |
@@ -152,7 +152,7 @@ EXECUTO_COOLDOWN_SECONDS=30
 | Variable                       | Required | Default                      | Description                  |
 |--------------------------------|----------|------------------------------|------------------------------|
 | `GROQ_API_KEY`                 | ✅       | —                            | Groq API key                 |
-| `GROQ_MODEL`                   | No       | `llama-3.3-70b-versatile`    | Groq model                   |
+| `GROQ_MODEL`                   | No       | `openai/gpt-oss-20b`         | Groq model                   |
 | `EXECUTO_MAX_RUNS_PER_SESSION` | No       | `10`                         | Max runs per browser session |
 | `EXECUTO_COOLDOWN_SECONDS`     | No       | `30`                         | Cooldown between runs (sec)  |
 
