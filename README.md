@@ -169,6 +169,32 @@ EXECUTO_COOLDOWN_SECONDS=30
 
 ---
 
+## CI
+
+**On every push/PR to `main`** (`.github/workflows/test.yml`):
+
+| Job | What runs |
+|-----|-----------|
+| `unit-tests` | `python -m unittest discover -s tests -p "test_*.py"` — agent parsing, errors, rate limits, HumanEval helpers, Gradio import |
+| `sandbox-integration` | Docker sandbox pass/fail tests (`tests/test_sandbox.py`) |
+
+**Nightly** (`.github/workflows/stability.yml`):
+
+- Runs `test_stability.py` with live Groq + Docker (default: 5 prompts)
+- Requires `GROQ_API_KEY` as a GitHub Actions secret
+- Can be triggered manually from the Actions tab (`workflow_dispatch`)
+
+Add the secret: **Repo → Settings → Secrets and variables → Actions → New repository secret** → name `GROQ_API_KEY`.
+
+Run tests locally:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+python test_stability.py --limit 5
+```
+
+---
+
 ## License
 
 MIT
