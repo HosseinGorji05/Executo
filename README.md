@@ -1,3 +1,4 @@
+[![Run Tests](https://github.com/HosseinGorji05/Executo/actions/workflows/test.yml/badge.svg)](https://github.com/HosseinGorji05/Executo/actions/workflows/test.yml)
 # ⚡ Executo
 
 > **Natural language → tested Python, automatically.**
