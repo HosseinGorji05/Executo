@@ -93,6 +93,18 @@ class RateLimiter:
         remaining = self.cooldown_seconds - elapsed
         return max(0, int(remaining) + 1)
 
+    @property
+    def cooldown_remaining(self) -> float:
+        """Un-rounded seconds left on the cooldown.
+
+        `seconds_until_ready` rounds up for display; a live client-side
+        countdown needs the real value to stay in step with the server.
+        """
+        if self._last_run_at == 0:
+            return 0.0
+        elapsed = time.monotonic() - self._last_run_at
+        return max(0.0, self.cooldown_seconds - elapsed)
+
     def status_line(self) -> str:
         """Short status string suitable for a UI footer or tooltip."""
         remaining = self.runs_remaining

@@ -1,0 +1,817 @@
+/* ==========================================================================
+   Executo — design system
+   Tokens first, then layout, then components. Avoid adding one-off colours:
+   pull from the variables below so light/heavy surfaces stay consistent.
+   ========================================================================== */
+
+:root {
+    color-scheme: dark;
+
+    --ex-bg: #09090b;
+    --ex-surface: #121215;
+    --ex-surface-2: #17171b;
+    --ex-raised: #1d1d22;
+    --ex-line: rgba(255, 255, 255, 0.08);
+    --ex-line-strong: rgba(255, 255, 255, 0.14);
+
+    --ex-text: #fafafa;
+    --ex-muted: #a1a1aa;
+    --ex-faint: #71717a;
+    --ex-dim: #52525b;
+
+    --ex-green: #4ade80;
+    --ex-red: #f87171;
+    --ex-amber: #fbbf24;
+    --ex-blue: #7dd3fc;
+
+    --ex-radius-lg: 16px;
+    --ex-radius: 11px;
+    --ex-radius-sm: 8px;
+
+    --ex-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --ex-nav-h: 56px;
+}
+
+html,
+body,
+gradio-app,
+#root,
+.gradio-container,
+.gradio-container .main,
+.gradio-container .wrap,
+.gradio-container .contain {
+    background: var(--ex-bg) !important;
+}
+
+/* Gradio nests several padded wrappers between <body> and our own layout.
+   Flatten them so the nav can bleed to the viewport edges and `.executo-main`
+   is the single source of horizontal rhythm. */
+.gradio-container,
+.gradio-container .main,
+.gradio-container .app,
+.gradio-container .wrap,
+.gradio-container .contain,
+.gradio-container .fillable {
+    max-width: 100% !important;
+    padding: 0 !important;
+    color: var(--ex-text);
+}
+
+footer,
+.gradio-container .built-with,
+.gradio-container .show-api {
+    display: none !important;
+}
+
+::selection {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* Scrollbars inside our own panels only — leave the page scrollbar native. */
+.ex-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+.ex-scroll::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+.ex-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 99px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+.ex-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.24);
+    background-clip: content-box;
+}
+
+/* ==========================================================================
+   Navigation
+   ========================================================================== */
+
+.executo-nav {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 16px !important;
+    height: var(--ex-nav-h);
+    padding: 0 20px !important;
+    margin: 0 !important;
+    border: none !important;
+    border-bottom: 1px solid var(--ex-line) !important;
+    border-radius: 0 !important;
+    background: rgba(9, 9, 11, 0.82) !important;
+    backdrop-filter: blur(14px);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+.executo-nav > .executo-navblock {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    overflow: visible !important;
+}
+
+.executo-brandmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.executo-brandmark img {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    display: block;
+}
+.executo-brandmark .name {
+    color: var(--ex-text);
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.executo-brandmark .tagline {
+    color: var(--ex-dim);
+    font-size: 13px;
+    padding-left: 12px;
+    margin-left: 2px;
+    border-left: 1px solid var(--ex-line);
+}
+@media (max-width: 620px) {
+    .executo-brandmark .tagline {
+        display: none;
+    }
+}
+
+/* ── Session chip (live cooldown countdown) ── */
+
+.ex-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--ex-line);
+    border-radius: 99px;
+    background: var(--ex-surface);
+    font-size: 12.5px;
+    color: var(--ex-muted);
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.ex-chip .ex-chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 99px;
+    background: var(--ex-green);
+    flex: 0 0 auto;
+}
+.ex-chip[data-state="cooling"] .ex-chip-dot {
+    background: var(--ex-amber);
+    animation: ex-pulse 1.4s ease-in-out infinite;
+}
+.ex-chip[data-state="empty"] .ex-chip-dot {
+    background: var(--ex-red);
+}
+.ex-chip .ex-chip-runs {
+    color: var(--ex-faint);
+}
+.ex-chip .ex-chip-runs b {
+    color: var(--ex-text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.ex-chip .ex-chip-div {
+    width: 1px;
+    height: 13px;
+    background: var(--ex-line);
+}
+.ex-chip .ex-chip-timer {
+    font-variant-numeric: tabular-nums;
+    color: var(--ex-muted);
+}
+.ex-chip[data-state="cooling"] .ex-chip-timer {
+    color: var(--ex-amber);
+}
+/* Cooldown drains along the bottom edge of the chip. The track only appears
+   while cooling so a ready chip stays a clean pill. */
+.ex-chip .ex-chip-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: transparent;
+}
+.ex-chip[data-state="cooling"] .ex-chip-bar {
+    background: rgba(251, 191, 36, 0.14);
+}
+.ex-chip .ex-chip-bar i {
+    display: block;
+    height: 100%;
+    width: 0%;
+    background: var(--ex-amber);
+    opacity: 0.8;
+    transition: width 0.2s linear;
+}
+
+@keyframes ex-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+/* ==========================================================================
+   Page shell
+   ========================================================================== */
+
+.executo-main {
+    max-width: 780px !important;
+    margin: 0 auto !important;
+    padding: 34px 24px 96px !important;
+    gap: 0 !important;
+}
+
+/* gr.HTML stamps elem_classes onto both the .block wrapper and the inner
+   .prose div, so spacing has to target the wrapper only — otherwise every
+   margin below is applied twice. */
+.block.executo-hero {
+    padding: 0 !important;
+    margin: 4px 0 30px !important;
+    background: transparent !important;
+    border: none !important;
+}
+.prose.executo-hero {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.executo-hero {
+    text-align: center;
+    background: transparent !important;
+    border: none !important;
+}
+.executo-hero h1 {
+    color: var(--ex-text);
+    font-size: 34px;
+    line-height: 1.15;
+    font-weight: 640;
+    letter-spacing: -0.028em;
+    margin: 0 0 14px;
+}
+.executo-hero p {
+    color: var(--ex-faint);
+    font-size: 15px;
+    line-height: 1.62;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   Composer
+   ========================================================================== */
+
+.executo-composer {
+    background: var(--ex-surface) !important;
+    border: 1px solid var(--ex-line) !important;
+    border-radius: var(--ex-radius-lg) !important;
+    padding: 6px 6px 6px !important;
+    gap: 0 !important;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.executo-composer:focus-within {
+    border-color: var(--ex-line-strong) !important;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.035);
+}
+.executo-composer .block,
+.executo-composer .form,
+.executo-composer .container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.executo-textarea textarea {
+    background: transparent !important;
+    color: var(--ex-text) !important;
+    font-size: 14.5px !important;
+    line-height: 1.6 !important;
+    min-height: 132px !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 12px 12px 4px !important;
+    resize: none !important;
+}
+.executo-textarea textarea::placeholder {
+    color: var(--ex-dim) !important;
+}
+
+.executo-composer-foot {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 4px 6px 4px 12px !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+.executo-hint {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+.executo-hint span {
+    color: var(--ex-dim);
+    font-size: 12.5px;
+}
+.executo-hint kbd {
+    font-family: var(--ex-mono);
+    font-size: 11px;
+    color: var(--ex-faint);
+    background: var(--ex-raised);
+    border: 1px solid var(--ex-line);
+    border-radius: 5px;
+    padding: 1px 5px;
+}
+
+/* ── Buttons ── */
+
+button.ex-btn-ghost,
+button.ex-btn-primary {
+    min-width: max-content !important;
+    width: auto !important;
+    white-space: nowrap !important;
+    border-radius: 99px !important;
+    box-shadow: none !important;
+    font-size: 13px !important;
+    transition: background 0.14s ease, color 0.14s ease, opacity 0.14s ease;
+}
+button.ex-btn-ghost {
+    background: transparent !important;
+    color: var(--ex-faint) !important;
+    border: none !important;
+    padding: 8px 14px !important;
+}
+button.ex-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: var(--ex-text) !important;
+}
+button.ex-btn-primary {
+    background: var(--ex-text) !important;
+    color: #0a0a0a !important;
+    border: none !important;
+    font-weight: 600 !important;
+    padding: 9px 18px !important;
+}
+button.ex-btn-primary:hover {
+    background: #e4e4e7 !important;
+}
+button.ex-btn-primary:disabled,
+button.ex-btn-primary[disabled] {
+    background: var(--ex-raised) !important;
+    color: var(--ex-faint) !important;
+    cursor: default !important;
+}
+
+/* ── Example prompts ── */
+
+.executo-examples {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 7px !important;
+    margin-top: 14px !important;
+    padding: 0 2px !important;
+    background: transparent !important;
+    border: none !important;
+}
+button.ex-example {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    background: var(--ex-surface) !important;
+    color: var(--ex-faint) !important;
+    border: 1px solid var(--ex-line) !important;
+    border-radius: 99px !important;
+    box-shadow: none !important;
+    font-size: 12.5px !important;
+    font-weight: 400 !important;
+    padding: 6px 13px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    transition: color 0.14s ease, border-color 0.14s ease;
+}
+button.ex-example:hover {
+    color: var(--ex-text) !important;
+    border-color: var(--ex-line-strong) !important;
+}
+
+/* ==========================================================================
+   Live run panel
+   ========================================================================== */
+
+.executo-runhost,
+.executo-codehost,
+.executo-runhost > .block,
+.executo-runhost .html-container {
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    gap: 0 !important;
+}
+.executo-runhost {
+    margin-top: 22px !important;
+}
+
+.ex-run {
+    background: var(--ex-surface);
+    border: 1px solid var(--ex-line);
+    border-radius: var(--ex-radius-lg);
+    overflow: hidden;
+}
+
+.ex-run-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ex-line);
+    background: var(--ex-surface-2);
+}
+
+.ex-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    border: 1px solid transparent;
+}
+.ex-badge i {
+    width: 6px;
+    height: 6px;
+    border-radius: 99px;
+    background: currentColor;
+}
+.ex-badge[data-state="running"] {
+    color: var(--ex-blue);
+    background: rgba(125, 211, 252, 0.1);
+    border-color: rgba(125, 211, 252, 0.22);
+}
+.ex-badge[data-state="running"] i {
+    animation: ex-pulse 1.2s ease-in-out infinite;
+}
+.ex-badge[data-state="passed"] {
+    color: var(--ex-green);
+    background: rgba(74, 222, 128, 0.1);
+    border-color: rgba(74, 222, 128, 0.22);
+}
+.ex-badge[data-state="failed"],
+.ex-badge[data-state="error"] {
+    color: var(--ex-red);
+    background: rgba(248, 113, 113, 0.1);
+    border-color: rgba(248, 113, 113, 0.22);
+}
+.ex-badge[data-state="blocked"] {
+    color: var(--ex-amber);
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.22);
+}
+
+.ex-run-meta {
+    color: var(--ex-faint);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+.ex-run-spacer {
+    flex: 1 1 auto;
+}
+.ex-run-clock {
+    font-family: var(--ex-mono);
+    font-size: 12.5px;
+    color: var(--ex-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.ex-run-task {
+    display: flex;
+    gap: 9px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ex-line);
+    color: var(--ex-muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+.ex-run-task .label {
+    color: var(--ex-dim);
+    flex: 0 0 auto;
+}
+
+/* ── Step timeline ── */
+
+.ex-steps {
+    list-style: none;
+    margin: 0;
+    padding: 6px 0;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.ex-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 7px 14px;
+    position: relative;
+}
+/* Connector line joining the step markers into one pipeline. */
+.ex-step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 27px;
+    bottom: -9px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.11);
+}
+.ex-step-icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    display: grid;
+    place-items: center;
+    color: var(--ex-dim);
+    position: relative;
+    z-index: 1;
+    background: var(--ex-surface);
+}
+.ex-step-icon svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+.ex-step[data-state="done"] .ex-step-icon {
+    color: var(--ex-green);
+}
+.ex-step[data-state="failed"] .ex-step-icon {
+    color: var(--ex-red);
+}
+.ex-step[data-state="active"] .ex-step-icon {
+    color: var(--ex-blue);
+}
+.ex-step[data-state="active"] .ex-step-icon svg {
+    animation: ex-spin 0.9s linear infinite;
+}
+@keyframes ex-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ex-step-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.ex-step-label {
+    color: var(--ex-muted);
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+.ex-step[data-state="active"] .ex-step-label {
+    color: var(--ex-text);
+}
+.ex-step[data-state="done"] .ex-step-label,
+.ex-step[data-state="failed"] .ex-step-label {
+    color: var(--ex-muted);
+}
+.ex-step-detail {
+    color: var(--ex-dim);
+    font-size: 12px;
+    margin-top: 2px;
+}
+.ex-step-time {
+    flex: 0 0 auto;
+    font-family: var(--ex-mono);
+    font-size: 11.5px;
+    color: var(--ex-dim);
+    font-variant-numeric: tabular-nums;
+    margin-top: 3px;
+}
+
+/* ── Sandbox output ── */
+
+.ex-log {
+    border-top: 1px solid var(--ex-line);
+    background: #0c0c0e;
+}
+.ex-log > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 10px 14px;
+    color: var(--ex-faint);
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+}
+.ex-log > summary::-webkit-details-marker {
+    display: none;
+}
+.ex-log > summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 4px solid currentColor;
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+    transition: transform 0.15s ease;
+}
+.ex-log[open] > summary::before {
+    transform: rotate(90deg);
+}
+.ex-log > summary:hover {
+    color: var(--ex-text);
+}
+.ex-log pre {
+    margin: 0;
+    padding: 0 14px 14px;
+    max-height: 260px;
+    overflow: auto;
+    font-family: var(--ex-mono);
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: #c7c7cf;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ── Result banner ── */
+
+.ex-result {
+    display: flex;
+    gap: 10px;
+    padding: 13px 14px;
+    border-top: 1px solid var(--ex-line);
+    font-size: 13.5px;
+    line-height: 1.55;
+}
+.ex-result .ex-result-icon {
+    flex: 0 0 auto;
+    margin-top: 1px;
+}
+.ex-result strong {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.ex-result p {
+    margin: 0;
+    color: var(--ex-faint);
+    font-size: 12.5px;
+    line-height: 1.6;
+    white-space: pre-line;
+}
+.ex-result[data-state="passed"] {
+    background: rgba(74, 222, 128, 0.05);
+    color: var(--ex-green);
+}
+.ex-result[data-state="failed"],
+.ex-result[data-state="error"] {
+    background: rgba(248, 113, 113, 0.05);
+    color: var(--ex-red);
+}
+.ex-result[data-state="blocked"] {
+    background: rgba(251, 191, 36, 0.05);
+    color: var(--ex-amber);
+}
+.ex-result a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+/* ==========================================================================
+   Generated code
+   ========================================================================== */
+
+.executo-codehost {
+    margin-top: 20px !important;
+}
+.block.executo-sectiontitle {
+    padding: 0 2px 10px !important;
+    background: transparent !important;
+    border: none !important;
+}
+.prose.executo-sectiontitle {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.executo-sectiontitle span {
+    color: var(--ex-dim);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.executo-codetabs {
+    border: none !important;
+    background: transparent !important;
+}
+.executo-codetabs .tab-wrapper,
+.executo-codetabs .tab-container,
+.executo-codetabs [class*="tab-nav"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    gap: 4px !important;
+    margin-bottom: 8px !important;
+}
+.executo-codetabs button[role="tab"] {
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    color: var(--ex-faint) !important;
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    padding: 5px 13px !important;
+    border-radius: 99px !important;
+    box-shadow: none !important;
+}
+.executo-codetabs button[role="tab"]:hover {
+    color: var(--ex-text) !important;
+}
+.executo-codetabs button[role="tab"][aria-selected="true"],
+.executo-codetabs button[role="tab"].selected {
+    background: var(--ex-raised) !important;
+    border-color: var(--ex-line) !important;
+    color: var(--ex-text) !important;
+}
+.executo-codetabs .tabitem {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+.executo-codetabs .block,
+.executo-codetabs .container {
+    background: var(--ex-surface) !important;
+    border: 1px solid var(--ex-line) !important;
+    border-radius: var(--ex-radius) !important;
+    overflow: hidden !important;
+}
+.executo-codetabs label,
+.executo-codetabs .label-wrap span {
+    color: var(--ex-dim) !important;
+    font-family: var(--ex-mono) !important;
+    font-size: 11.5px !important;
+}
+.executo-codetabs .cm-editor,
+.executo-codetabs .cm-scroller,
+.executo-codetabs .cm-gutters {
+    background: transparent !important;
+}
+.executo-codetabs .cm-editor {
+    font-size: 12.5px !important;
+}
+.executo-codetabs .cm-gutters {
+    border-right: 1px solid var(--ex-line) !important;
+    color: var(--ex-dim) !important;
+}
+.executo-codetabs .cm-activeLine,
+.executo-codetabs .cm-activeLineGutter {
+    background: rgba(255, 255, 255, 0.025) !important;
+}
+
+/* ==========================================================================
+   Motion
+   ========================================================================== */
+
+.ex-fade {
+    animation: ex-fade-in 0.24s ease both;
+}
+@keyframes ex-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+}

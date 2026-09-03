@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from typing import Any, Optional, TypedDict
 
 from dotenv import load_dotenv
@@ -34,6 +35,15 @@ load_dotenv()
 DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 DEFAULT_MAX_ATTEMPTS = 4
 
+# gpt-oss models emit chain-of-thought as reasoning tokens that count against
+# the completion budget. With the library default (2048) a hard task spends the
+# whole budget reasoning and returns EMPTY content — every attempt then "fails"
+# with NO TESTS RAN. Give reasoning + code real room; "medium" effort keeps the
+# reasoning from ballooning. Groq reserves max_tokens against the daily limit,
+# so this is a headroom figure, not a target — override via GROQ_MAX_TOKENS.
+MAX_OUTPUT_TOKENS = int(os.environ.get("GROQ_MAX_TOKENS", "8192"))
+REASONING_EFFORT = os.environ.get("GROQ_REASONING_EFFORT", "medium")
+
 
 class AgentState(TypedDict, total=False):
     task: str
@@ -48,6 +58,7 @@ class AgentState(TypedDict, total=False):
     humaneval_test_code: str
     self_test_passed: bool
     humaneval_passed: bool
+    reasoning: str
 
 
 
@@ -92,12 +103,32 @@ def parse_solution_and_tests(
     return solution, tests
 
 
+def _parse_partial(text: str, fallback_test: Optional[str] = None) -> tuple[str, str]:
+    """Best-effort parse of a response that is still streaming in.
+
+    The fence regex needs a closing ```; while a block is mid-stream there
+    isn't one yet, so temporarily close a dangling fence before parsing. This
+    lets the UI show the solution filling in line by line.
+    """
+    if text.count("```") % 2 == 1:
+        text = text + "\n```"
+    return parse_solution_and_tests(text, fallback_test)
+
+
 def _get_llm(model: str):
     # Imported lazily so importing this module doesn't require the package
     # (or an API key) until the agent actually runs.
     from langchain_groq import ChatGroq
 
-    return ChatGroq(model=model, temperature=0)
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "temperature": 0,
+        "max_tokens": MAX_OUTPUT_TOKENS,
+    }
+    # reasoning_effort is a gpt-oss-only knob; passing it to other models 400s.
+    if "gpt-oss" in model:
+        kwargs["reasoning_effort"] = REASONING_EFFORT
+    return ChatGroq(**kwargs)
 
 
 def _generate_node(state: AgentState) -> dict[str, Any]:
@@ -309,6 +340,55 @@ def _prepare_run(
     }
 
 
+_PARTIAL_EMIT_INTERVAL = 0.12  # seconds between UI updates while tokens stream
+
+
+def _stream_llm_code(
+    messages: list,
+    model: str,
+    fallback_test: str | None = None,
+):
+    """Stream one LLM call, yielding (reasoning, code, test_code, done).
+
+    gpt-oss-style models emit a block of reasoning tokens before any content,
+    so both are surfaced: the reasoning explains what the agent is about to do
+    while the code fills in underneath it.
+    """
+    llm = _get_llm(model)
+    reasoning = ""
+    body = ""
+    finish_reason = None
+    last_emit = 0.0
+
+    for chunk in llm.stream(messages):
+        reasoning += chunk.additional_kwargs.get("reasoning_content") or ""
+        body += chunk.content or ""
+        finish_reason = (
+            chunk.response_metadata.get("finish_reason") or finish_reason
+        )
+
+        now = time.monotonic()
+        if now - last_emit >= _PARTIAL_EMIT_INTERVAL:
+            code, test_code = _parse_partial(body, fallback_test)
+            yield reasoning, code, test_code, False
+            last_emit = now
+
+    code, test_code = parse_solution_and_tests(body, fallback_test)
+
+    # gpt-oss can spend the entire token budget on reasoning and return no
+    # content at all. Surface that as a clear error instead of letting the
+    # loop burn every attempt on an empty solution.
+    if not body.strip():
+        if finish_reason == "length":
+            raise RuntimeError(
+                "The model used its whole token budget on reasoning and wrote "
+                "no code. Raise GROQ_MAX_TOKENS or set GROQ_REASONING_EFFORT=low."
+            )
+        raise RuntimeError("The model returned an empty response. Try again.")
+
+    yield reasoning, code, test_code, True
+
+
 def stream_executo_events(
     task: str,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
@@ -318,24 +398,73 @@ def stream_executo_events(
 ):
     """Yield (event_name, state) tuples as the agent runs.
 
-    Events: "start", "generate", "execute", "fix", "done". The state is a fresh
-    snapshot dict on every yield, suitable for driving a UI.
+    Unlike ``run_executo`` this drives the generate → execute → fix loop
+    directly rather than through ``agent.stream`` so the LLM's tokens can be
+    surfaced as they arrive. The state dict on each yield is a fresh snapshot.
+
+    Events:
+        start       — run accepted
+        generating  — LLM writing the first solution (repeats; state has the
+                      partial ``code``/``test_code`` and ``reasoning``)
+        generate    — first solution parsed
+        executing   — sandbox started for this attempt
+        execute     — sandbox finished (state has pass/fail + ``output``)
+        fixing      — LLM rewriting after a failure (repeats, like generating)
+        fix         — repaired solution parsed
+        done        — loop finished (passed, or attempts exhausted)
     """
-    initial_state = _prepare_run(
+    state: AgentState = _prepare_run(
         task, max_attempts, model, humaneval_task_id, humaneval_dataset
     )
-    agent = build_agent()
+    state.setdefault("attempts", 0)
+    he_tests = state.get("humaneval_test_code", "")
 
-    final_state: AgentState = dict(initial_state)
-    yield "start", dict(final_state)
-    yield "generating", dict(final_state)
+    yield "start", dict(state)
 
-    for event in agent.stream(initial_state, stream_mode="updates"):
-        for node, update in event.items():
-            final_state.update(update)
-            yield node, dict(final_state)
+    # --- first solution --------------------------------------------------- #
+    for reasoning, code, test_code, done in _stream_llm_code(
+        [
+            SystemMessage(content=prompts.GENERATE_SYSTEM),
+            HumanMessage(content=prompts.generate_user(state["task"])),
+        ],
+        model,
+    ):
+        state.update(code=code, test_code=test_code, reasoning=reasoning)
+        yield ("generate" if done else "generating"), dict(state)
 
-    yield "done", dict(final_state)
+    # --- generate → execute → fix loop ---------------------------------- #
+    while True:
+        yield "executing", dict(state)
+        state.update(_execute_node(state))
+        yield "execute", dict(state)
+
+        if state.get("passed") or state.get("attempts", 0) >= state.get(
+            "max_attempts", DEFAULT_MAX_ATTEMPTS
+        ):
+            break
+
+        has_he = bool(he_tests)
+        fix_messages = [
+            SystemMessage(content=prompts.FIX_SYSTEM),
+            HumanMessage(
+                content=prompts.fix_user(
+                    state["task"],
+                    state["code"],
+                    state["test_code"],
+                    state["output"],
+                    self_test_passed=state.get("self_test_passed"),
+                    humaneval_passed=state.get("humaneval_passed"),
+                    has_humaneval=has_he,
+                )
+            ),
+        ]
+        for reasoning, code, test_code, done in _stream_llm_code(
+            fix_messages, model, fallback_test=state["test_code"]
+        ):
+            state.update(code=code, test_code=test_code, reasoning=reasoning)
+            yield ("fix" if done else "fixing"), dict(state)
+
+    yield "done", dict(state)
 
 
 def _build_cli_parser():

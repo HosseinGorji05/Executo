@@ -26,9 +26,25 @@ def format_llm_error(message: str) -> str:
             "See https://console.groq.com/docs/models for current model IDs."
         )
     if "429" in message or "rate_limit" in lower or "resource_exhausted" in lower:
+        import re
+
+        retry = re.search(r"try again in ([\dhms.]+)", message)
+        wait = f"Try again in {retry.group(1).rstrip('.')}.\n" if retry else ""
+
+        if "per day" in lower or "(tpd)" in lower or "tokens per day" in lower:
+            return (
+                "Groq daily token limit reached (free tier: 200k tokens/day).\n"
+                f"{wait}"
+                "It refills gradually over the day. To keep working now, set a "
+                "different model in .env, e.g.\n"
+                "  GROQ_MODEL=openai/gpt-oss-120b\n"
+                "Usage: https://console.groq.com/settings/limits"
+            )
         return (
-            "Groq rate limit hit.\n"
-            "Wait a minute or try a smaller model (e.g. openai/gpt-oss-20b).\n"
+            "Groq rate limit hit (too many requests this minute).\n"
+            f"{wait}"
+            "Wait a few seconds and run again, or switch models in .env "
+            "(e.g. GROQ_MODEL=openai/gpt-oss-120b).\n"
             "Dashboard: https://console.groq.com/"
         )
     if "invalid_api_key" in lower or "401" in message:
