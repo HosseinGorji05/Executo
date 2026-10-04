@@ -17,7 +17,7 @@ Your prompt  →  LLM writes code + tests  →  Docker sandbox runs tests
 
 - **Self-correcting** — up to 4 attempts; the agent reads real unittest errors and rewrites
 - **Sandboxed** — Docker with no network, capped CPU/RAM, read-only mounts
-- **Benchmarked** — 90% pass rate on HumanEval (10-task sample)
+- **Benchmarked** — 80% pass rate on HumanEval (30-task sample)
 - **Streaming UI** — watch generate → test → fix live in the browser
 
 ---
